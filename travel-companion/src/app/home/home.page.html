@@ -7,32 +7,47 @@
 
 <!-- Main content area -->
 <ion-content class="ion-padding">
-  <div class="ion-text-center">
-    <ion-button class="ion-margin" (click)="takePicture()">Take Picture</ion-button>
-    <ion-button class="ion-margin" (click)="getLocation()">Get Location</ion-button>
-    
-    @if (locationError) {
-      <div class="ion-margin ion-padding error-message">
-        <ion-text color="danger">
-          <p>{{ locationError }}</p>
-        </ion-text>
-      </div>
-    }
+  <ion-button class="ion-margin" (click)="takePicture()">Take Picture</ion-button>
+  <ion-button class="ion-margin" (click)="getLocation()">Get Location</ion-button>
+  <ion-button class="ion-margin" (click)="getDeviceInfo()">Get Device Info</ion-button>
 
-    @if (capturedImage) {
-      <div class="ion-margin">
-        <img [src]="capturedImage">
-      </div>
-    }
-
-    @if (currentLocation) {
-      <div class="ion-margin ion-padding location-info">
-        <h2>Current Location:</h2>
-        <p>
-          <strong>Latitude:</strong> {{currentLocation.latitude}}<br>
-          <strong>Longitude:</strong> {{currentLocation.longitude}}
-        </p>
-      </div>
-    }
+  @if (locationError) {
+  <div class="ion-margin ion-padding error-message">
+    <ion-text color="danger">
+      <p>{{ locationError }}</p>
+    </ion-text>
   </div>
+  }
+
+  @if (capturedImage) {
+  <div class="ion-margin">
+    <img [src]="capturedImage">
+  </div>
+  }
+
+  @if (deviceInfo) {
+  <ion-card class="ion-margin">
+    <ion-card-header>
+      <ion-card-title>Device Information</ion-card-title>
+    </ion-card-header>
+    <ion-card-content>
+      <p><strong>Model:</strong> {{deviceInfo.model}}</p>
+      <p><strong>Platform:</strong> {{deviceInfo.platform}}</p>
+      <p><strong>Operating System:</strong> {{deviceInfo.operatingSystem}}</p>
+      <p><strong>OS Version:</strong> {{deviceInfo.osVersion}}</p>
+      <p><strong>Manufacturer:</strong> {{deviceInfo.manufacturer}}</p>
+    </ion-card-content>
+  </ion-card>
+  }
+
+  @if (currentLocation) {
+  <div class="ion-margin ion-padding location-info">
+    <h2>Current Location:</h2>
+    <p>
+      <strong>Latitude:</strong> {{currentLocation.latitude}}<br>
+      <strong>Longitude:</strong> {{currentLocation.longitude}}
+    </p>
+  </div>
+  }
+
 </ion-content>
