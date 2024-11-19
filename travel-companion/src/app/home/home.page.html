@@ -7,22 +7,24 @@
 
 <!-- Main content area -->
 <ion-content class="ion-padding">
-  <!-- Button to trigger camera - calls takePicture() method when clicked -->
-  <ion-button class="ion-margin" (click)="takePicture()">Take Picture</ion-button>
-  <ion-button class="ion-margin" (click)="getLocation()">Get Location</ion-button>
-  
-  <!-- Conditional rendering of captured image -->
-  <!-- Only shows when capturedImage property has a value -->
-  <!-- Uses Angular's new control flow syntax with @if -->
-  @if (capturedImage) {
-  <!-- Display captured image using data URL from camera service -->
-  <img [src]="capturedImage">
-  }
+  <div class="ion-text-center">
+    <ion-button class="ion-margin" (click)="takePicture()">Take Picture</ion-button>
+    <ion-button class="ion-margin" (click)="getLocation()">Get Location</ion-button>
+    
+    @if (capturedImage) {
+      <div class="ion-margin">
+        <img [src]="capturedImage">
+      </div>
+    }
 
-  @if (currentLocation) {
-  <p>
-    Latitude: {{currentLocation.latitude}}<br>
-    Longitude: {{currentLocation.longitude}}
-  </p>
-  }
+    @if (currentLocation) {
+      <div class="ion-margin ion-padding location-info">
+        <h2>Current Location:</h2>
+        <p>
+          <strong>Latitude:</strong> {{currentLocation.latitude}}<br>
+          <strong>Longitude:</strong> {{currentLocation.longitude}}
+        </p>
+      </div>
+    }
+  </div>
 </ion-content>

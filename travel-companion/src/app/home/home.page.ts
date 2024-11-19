@@ -33,10 +33,17 @@ export class HomePage {
   async getLocation() {
     try {
       const position = await this.locationService.getCurrentPosition();
-      this.currentLocation = {
-        latitude: position.coords.latitude,
-        longitude: position.coords.longitude
-      };
+      console.log('Position received:', position); // Debug log
+      
+      if (position && position.coords) {
+        this.currentLocation = {
+          latitude: position.coords.latitude,
+          longitude: position.coords.longitude
+        };
+        console.log('Current location set:', this.currentLocation); // Debug log
+      } else {
+        console.error('Invalid position object received');
+      }
     } catch (error) {
       console.error('Error getting location:', error);
     }
