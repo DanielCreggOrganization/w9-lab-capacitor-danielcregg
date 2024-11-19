@@ -10,6 +10,35 @@
   <ion-button class="ion-margin" (click)="takePicture()">Take Picture</ion-button>
   <ion-button class="ion-margin" (click)="getLocation()">Get Location</ion-button>
   <ion-button class="ion-margin" (click)="getDeviceInfo()">Get Device Info</ion-button>
+  <ion-button class="ion-margin" (click)="checkNetworkStatus()">Check Network</ion-button>
+
+  <ion-item>
+    <ion-label position="floating">Text to Speak</ion-label>
+    <ion-input [(ngModel)]="textToSpeak"></ion-input>
+  </ion-item>
+
+  <ion-button class="ion-margin" (click)="speakText()">Speak Text</ion-button>
+
+  @if (networkStatus) {
+    <ion-card class="ion-margin">
+      <ion-card-header>
+        <ion-card-title>Network Status</ion-card-title>
+      </ion-card-header>
+      <ion-card-content>
+        <ion-text [color]="networkStatus.isOnline ? 'success' : 'danger'">
+          <p><strong>Status:</strong> {{networkStatus.isOnline ? 'Online' : 'Offline'}}</p>
+          <p><strong>Connection Type:</strong> {{networkStatus.connectionType}}</p>
+          <p><strong>Connection Quality:</strong> {{networkStatus.connectionQuality}}</p>
+          <p><strong>Network Type:</strong> 
+            @if (networkStatus.isWifi) { WiFi }
+            @if (networkStatus.isCellular) { Mobile Data }
+            @if (networkStatus.isNone) { No Connection }
+          </p>
+          <p><strong>Last Updated:</strong> {{networkStatus.timestamp | date:'medium'}}</p>
+        </ion-text>
+      </ion-card-content>
+    </ion-card>
+  }
 
   @if (locationError) {
   <div class="ion-margin ion-padding error-message">

@@ -5,6 +5,7 @@ import { IonCard, IonCardContent, IonCardHeader, IonCardTitle } from '@ionic/ang
 import { CameraService } from '../services/camera.service';
 import { LocationService } from '../services/location.service';
 import { DeviceInfoService } from '../services/device-info.service';
+import { NetworkService } from '../services/network.service';
 
 @Component({
   selector: 'app-home',
@@ -29,12 +30,17 @@ export class HomePage {
   currentLocation: { latitude: number; longitude: number } | undefined;
   locationError: string | undefined;
   deviceInfo: any;
+  networkStatus: any;
+  isConnected: boolean = false;
 
   constructor(
     private cameraService: CameraService,
     private locationService: LocationService,
-    private deviceInfoService: DeviceInfoService
-  ) {}
+    private deviceInfoService: DeviceInfoService,
+    private networkService: NetworkService
+  ) {
+    this.initializeNetworkStatus();
+  }
 
   async takePicture() {
     this.capturedImage = await this.cameraService.takePicture();
@@ -64,5 +70,16 @@ export class HomePage {
     } catch (error) {
       console.error('Error getting device info:', error);
     }
+  }
+
+  private async initializeNetworkStatus() {
+    // Subscribe to network status changes
+    this.networkService.networkStatus$.subscribe(connected => {
+      this.isConnected = connected;
+    });
+  }
+
+  async checkNetworkStatus() {
+    this.networkStatus = await this.networkService.getCurrentNetworkStatus();
   }
 }
