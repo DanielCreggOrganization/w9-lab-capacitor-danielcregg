@@ -1,5 +1,6 @@
 import { Injectable } from '@angular/core';
 import { Geolocation } from '@capacitor/geolocation';
+import { Capacitor } from '@capacitor/core';
 
 @Injectable({
   providedIn: 'root'
@@ -14,11 +15,16 @@ export class LocationService {
         maximumAge: 0
       };
 
-      await this.requestPermissions(); // Always request permissions first
+      // Check if the platform is not web before requesting permissions
+      if (Capacitor.isNativePlatform()) {
+        await this.requestPermissions();
+      }
+
       return await Geolocation.getCurrentPosition(options);
       
     } catch (error: any) {
-      console.log('Geolocation error details:', error);
+      console.log('Geolocation error:', error);
+      alert(`Error getting location (Code: ${error.code}): ${error.message}`);
       throw error;
     }
   }
