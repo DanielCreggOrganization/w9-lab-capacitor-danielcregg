@@ -1,4 +1,5 @@
 import { Component } from '@angular/core';
+import { CommonModule } from '@angular/common';
 import { IonHeader, IonToolbar, IonTitle, IonContent, IonButton } from '@ionic/angular/standalone';
 import { CameraService } from '../services/camera.service';
 import { LocationService } from '../services/location.service';
@@ -8,11 +9,12 @@ import { LocationService } from '../services/location.service';
   templateUrl: 'home.page.html',
   standalone: true,
   imports: [
+    CommonModule,
     IonHeader,
     IonToolbar,
     IonTitle,
     IonContent,
-    IonButton   // Make sure this is included
+    IonButton
   ],
 })
 export class HomePage {
