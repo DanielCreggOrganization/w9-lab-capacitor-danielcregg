@@ -11,6 +11,14 @@
     <ion-button class="ion-margin" (click)="takePicture()">Take Picture</ion-button>
     <ion-button class="ion-margin" (click)="getLocation()">Get Location</ion-button>
     
+    @if (locationError) {
+      <div class="ion-margin ion-padding error-message">
+        <ion-text color="danger">
+          <p>{{ locationError }}</p>
+        </ion-text>
+      </div>
+    }
+
     @if (capturedImage) {
       <div class="ion-margin">
         <img [src]="capturedImage">

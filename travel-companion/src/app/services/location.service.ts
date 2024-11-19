@@ -8,35 +8,46 @@ import { Capacitor } from '@capacitor/core';
 export class LocationService {
   async getCurrentPosition() {
     try {
-      // For browser testing, we'll use a more permissive configuration
       const options = {
-        enableHighAccuracy: true,
-        timeout: 10000,  // Increased timeout for browser
-        maximumAge: 0
+        enableHighAccuracy: false, // Set to false for faster initial response
+        timeout: 30000, // Increased timeout
+        maximumAge: 60000 // Allow cached positions up to 1 minute old
       };
 
-      // Check if the platform is not web before requesting permissions
+      // Check if running on native platform
       if (Capacitor.isNativePlatform()) {
-        await this.requestPermissions();
+        const permissionStatus = await this.requestPermissions();
+        if (permissionStatus.location !== 'granted') {
+          throw new Error('Location permission not granted');
+        }
       }
 
-      return await Geolocation.getCurrentPosition(options);
+      // Try to get position
+      const position = await Geolocation.getCurrentPosition(options);
+      if (!position) {
+        throw new Error('Unable to get position');
+      }
       
+      return position;
     } catch (error: any) {
-      console.log('Geolocation error:', error);
-      alert(`Error getting location (Code: ${error.code}): ${error.message}`);
+      // Handle specific error codes
+      if (error.code === 2) { // POSITION_UNAVAILABLE
+        throw new Error('Location service is unavailable. Please check if location services are enabled.');
+      } else if (error.code === 1) { // PERMISSION_DENIED
+        throw new Error('Location permission denied. Please enable location services in your settings.');
+      } else if (error.code === 3) { // TIMEOUT
+        throw new Error('Location request timed out. Please try again.');
+      }
       throw error;
     }
   }
 
   private async requestPermissions() {
     try {
-      const status = await Geolocation.requestPermissions();
-      console.log('Permission status:', status);
-      return status;
-    } catch (e) {
-      console.log('Permission request error:', e);
-      throw e;
+      return await Geolocation.requestPermissions();
+    } catch (error) {
+      console.error('Permission request failed:', error);
+      throw new Error('Failed to request location permissions');
     }
   }
 }
