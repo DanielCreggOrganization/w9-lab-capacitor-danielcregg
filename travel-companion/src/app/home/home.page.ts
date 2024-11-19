@@ -6,6 +6,7 @@ import { CameraService } from '../services/camera.service';
 import { LocationService } from '../services/location.service';
 import { DeviceInfoService } from '../services/device-info.service';
 import { NetworkService } from '../services/network.service';
+import { TextToSpeech } from '@capacitor-community/text-to-speech';
 
 @Component({
   selector: 'app-home',
@@ -32,6 +33,7 @@ export class HomePage {
   deviceInfo: any;
   networkStatus: any;
   isConnected: boolean = false;
+  textToSpeak: string = '';
 
   constructor(
     private cameraService: CameraService,
@@ -81,5 +83,20 @@ export class HomePage {
 
   async checkNetworkStatus() {
     this.networkStatus = await this.networkService.getCurrentNetworkStatus();
+  }
+
+  async speakText() {
+    try {
+      await TextToSpeech.speak({
+        text: this.textToSpeak,
+        lang: 'en-US',
+        rate: 1.0,
+        pitch: 1.0,
+        volume: 1.0,
+        category: 'ambient'
+      });
+    } catch (error) {
+      console.error('Error in text-to-speech:', error);
+    }
   }
 }
