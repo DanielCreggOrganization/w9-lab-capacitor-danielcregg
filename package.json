@@ -1,7 +1,5 @@
 {
   "dependencies": {
-    "@capacitor/camera": "^6.1.0",
-    "@capacitor/device": "^6.0.1",
-    "@capacitor/geolocation": "^6.0.1"
+    "@capacitor-community/text-to-speech": "^5.1.0"
   }
 }
