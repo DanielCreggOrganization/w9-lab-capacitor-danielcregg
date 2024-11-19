@@ -1,13 +1,20 @@
-<!-- Page header -->
+<!-- Main header section with app title -->
 <ion-header>
   <ion-toolbar>
     <ion-title>Camera Demo</ion-title>
   </ion-toolbar>
 </ion-header>
 
+<!-- Main content area -->
 <ion-content>
+  <!-- Button to trigger camera - calls takePicture() method when clicked -->
   <ion-button (click)="takePicture()">Take Picture</ion-button>
+  
+  <!-- Conditional rendering of captured image -->
+  <!-- Only shows when capturedImage property has a value -->
+  <!-- Uses Angular's new control flow syntax with @if -->
   @if (capturedImage) {
+    <!-- Display captured image using data URL from camera service -->
     <img [src]="capturedImage">
   }
 </ion-content>
