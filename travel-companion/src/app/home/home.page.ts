@@ -1,12 +1,12 @@
 import { Component } from '@angular/core';
 import { CommonModule } from '@angular/common';
-import { IonHeader, IonToolbar, IonTitle, IonContent, IonButton, IonText } from '@ionic/angular/standalone';
-import { IonCard, IonCardContent, IonCardHeader, IonCardTitle } from '@ionic/angular/standalone';
+import { FormsModule } from '@angular/forms';
+import { IonHeader, IonToolbar, IonTitle, IonContent, IonButton, IonText, IonCard, IonCardContent, IonCardHeader, IonCardTitle, IonItem, IonLabel, IonInput } from '@ionic/angular/standalone';
 import { CameraService } from '../services/camera.service';
 import { LocationService } from '../services/location.service';
 import { DeviceInfoService } from '../services/device-info.service';
 import { NetworkService } from '../services/network.service';
-import { TextToSpeech } from '@capacitor-community/text-to-speech';
+import { TextToSpeechService } from '../services/text-to-speech.service';
 
 @Component({
   selector: 'app-home',
@@ -14,6 +14,7 @@ import { TextToSpeech } from '@capacitor-community/text-to-speech';
   standalone: true,
   imports: [
     CommonModule,
+    FormsModule,
     IonHeader,
     IonToolbar,
     IonTitle,
@@ -23,7 +24,10 @@ import { TextToSpeech } from '@capacitor-community/text-to-speech';
     IonCard,
     IonCardContent,
     IonCardHeader,
-    IonCardTitle
+    IonCardTitle,
+    IonItem,
+    IonLabel,
+    IonInput
   ],
 })
 export class HomePage {
@@ -39,7 +43,8 @@ export class HomePage {
     private cameraService: CameraService,
     private locationService: LocationService,
     private deviceInfoService: DeviceInfoService,
-    private networkService: NetworkService
+    private networkService: NetworkService,
+    private ttsService: TextToSpeechService
   ) {
     this.initializeNetworkStatus();
   }
@@ -52,7 +57,7 @@ export class HomePage {
     try {
       this.locationError = undefined; // Reset error message
       const position = await this.locationService.getCurrentPosition();
-      
+
       if (position && position.coords) {
         this.currentLocation = {
           latitude: position.coords.latitude,
@@ -87,14 +92,7 @@ export class HomePage {
 
   async speakText() {
     try {
-      await TextToSpeech.speak({
-        text: this.textToSpeak,
-        lang: 'en-US',
-        rate: 1.0,
-        pitch: 1.0,
-        volume: 1.0,
-        category: 'ambient'
-      });
+      await this.ttsService.speak(this.textToSpeak);
     } catch (error) {
       console.error('Error in text-to-speech:', error);
     }
