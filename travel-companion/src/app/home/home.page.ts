@@ -7,6 +7,12 @@ import { LocationService } from '../services/location.service';
 import { DeviceInfoService } from '../services/device-info.service';
 import { NetworkService } from '../services/network.service';
 import { TextToSpeechService } from '../services/text-to-speech.service';
+// Import PWA Elements - these provide UI components for native features
+// PWA Elements are needed when running on the web to provide a native-like experience
+// They create fallback UI for Capacitor plugins (like Camera) when running in a browser
+import { defineCustomElements } from '@ionic/pwa-elements/loader';
+// Import Capacitor core functionality. This is needed to use Capacitor plugins
+defineCustomElements(window);
 
 @Component({
   selector: 'app-home',
