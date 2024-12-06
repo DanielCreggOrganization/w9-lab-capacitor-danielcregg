@@ -1,4 +1,3 @@
-
 name: Deploy Ionic PWA to GitHub Pages
 
 on:
@@ -37,6 +36,16 @@ jobs:
           fi
           echo "APP_PATH=$APP_PATH" >> $GITHUB_ENV
 
+      - name: Cache node modules
+        uses: actions/cache@v3
+        with:
+          path: |
+            ${{ env.APP_PATH }}/node_modules
+            ~/.npm
+          key: ${{ runner.os }}-node-${{ hashFiles(`${{ env.APP_PATH }}/package-lock.json`) }}
+          restore-keys: |
+            ${{ runner.os }}-node-
+
       - name: Set up Node
         uses: actions/setup-node@v3
         with:
@@ -47,11 +56,9 @@ jobs:
           cd $APP_PATH
           npm ci
 
-      - name: Install Ionic CLI
-        run: npm install -g @ionic/cli
-
-      - name: Install Angular CLI
-        run: npm install -g @angular/cli
+      - name: Install Global CLI Tools
+        run: |
+          npm install -g @ionic/cli @angular/cli
 
       - name: Check if PWA is already configured
         run: |
@@ -76,8 +83,8 @@ jobs:
         run: |
           cd $APP_PATH
           
-          # Install PWA dependencies
-          npm install @angular/service-worker@^18.0.0
+          # Install PWA dependencies with a compatible version
+          npm install @angular/service-worker@18.2.12
           
           # Create assets directories if they don't exist
           mkdir -p src/assets/icons
