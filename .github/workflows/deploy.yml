@@ -42,7 +42,7 @@ jobs:
           path: |
             ${{ env.APP_PATH }}/node_modules
             ~/.npm
-          key: ${{ runner.os }}-node-${{ hashFiles(`${{ env.APP_PATH }}/package-lock.json`) }}
+          key: ${{ runner.os }}-node-${{ hashFiles('${{ env.APP_PATH }}/package-lock.json') }}
           restore-keys: |
             ${{ runner.os }}-node-
 
