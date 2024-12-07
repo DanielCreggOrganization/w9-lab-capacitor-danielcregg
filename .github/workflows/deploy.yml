@@ -1,316 +1,122 @@
-name: Deploy Ionic PWA to GitHub Pages
+name: Deploy Ionic App to GitHub Pages
 
+# Workflow Triggers
 on:
   push:
     branches: ["main"]
-  workflow_dispatch:
+    paths-ignore:
+      # Prevent deployment on documentation changes
+      - '**/*.md'
+      - '**/*.MD'
+      - 'docs/**'
+      - 'LICENSE'
+      - '.gitignore'
+  workflow_dispatch:  # Allow manual trigger
 
+# Required permissions for GitHub Pages
 permissions:
   contents: read
   pages: write
   id-token: write
 
+# Global environment variables
+env:
+  NODE_VERSION: '18'  # Node.js version
+  ANGULAR_CONFIG: 'production'  # Build configuration
+  CACHE_KEY_PREFIX: 'ionic-gh-pages'  # Cache key prefix for better cache management
+
+# Prevent concurrent deployments
 concurrency:
   group: "pages"
-  cancel-in-progress: false
+  cancel-in-progress: true  # Changed to true to prevent queuing of outdated deployments
 
 jobs:
   deploy:
+    name: Build and Deploy
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
     runs-on: ubuntu-latest
+    timeout-minutes: 15  # Add timeout to prevent hanging workflows
+
     steps:
-      - name: Checkout
+      # SETUP PHASE
+      - name: Checkout repository
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 1  # Shallow clone for faster checkout
 
-      - name: Extract repository name
-        run: echo "REPO_NAME=${GITHUB_REPOSITORY##*/}" >> $GITHUB_ENV
+      - name: Extract repository and environment info
+        id: env-setup
+        run: |
+          echo "REPO_NAME=${GITHUB_REPOSITORY##*/}" >> $GITHUB_ENV
+          echo "TIMESTAMP=$(date +%Y%m%d_%H%M%S)" >> $GITHUB_ENV
+          echo "Node version: $(node -v)"
+          echo "NPM version: $(npm -v)"
 
-      - name: Find Ionic project directory
+      - name: Detect Ionic project directory
         id: find-ionic
         run: |
           APP_PATH=$(find . -type f -name ionic.config.json -exec dirname {} \; | head -n 1)
           if [ -z "$APP_PATH" ]; then
+            echo "⚠️ No ionic.config.json found, using root directory"
             APP_PATH="."
           fi
+          # Validate project structure
+          if [ ! -f "$APP_PATH/package.json" ]; then
+            echo "❌ Error: package.json not found in $APP_PATH"
+            exit 1
+          fi
           echo "APP_PATH=$APP_PATH" >> $GITHUB_ENV
+          echo "PACKAGE_JSON_PATH=$(realpath $APP_PATH/package-lock.json)" >> $GITHUB_ENV
+          echo "📂 Ionic app path: $APP_PATH"
 
-      - name: Set up Node
+      # DEPENDENCIES PHASE
+      - name: Setup Node.js and NPM cache
         uses: actions/setup-node@v3
         with:
-          node-version: '18'
+          node-version: ${{ env.NODE_VERSION }}
           cache: 'npm'
-          cache-dependency-path: '${{ env.APP_PATH }}/package-lock.json'
+          cache-dependency-path: ${{ env.PACKAGE_JSON_PATH }}
 
-      - name: Cache Angular and Ionic build
-        uses: actions/cache@v3
-        with:
-          path: |
-            ${{ env.APP_PATH }}/.angular/cache
-            ${{ env.APP_PATH }}/www
-            ${{ env.APP_PATH }}/platforms
-            ${{ env.APP_PATH }}/plugins
-            ${{ env.APP_PATH }}/.sourcemaps
-            ${{ env.APP_PATH }}/node_modules/.cache
-          key: ${{ runner.os }}-ionic-build-${{ hashFiles('**/package-lock.json') }}-${{ hashFiles('**/*.[jt]s', '**/*.[cm]ss', '**/*.html') }}
-          restore-keys: |
-            ${{ runner.os }}-ionic-build-${{ hashFiles('**/package-lock.json') }}-
-            ${{ runner.os }}-ionic-build-
-
-      - name: Install Dependencies
+      # Parallel installation of dependencies
+      - name: Install dependencies
         run: |
-          cd $APP_PATH
-          npm ci
+          # Install Ionic CLI globally in parallel with project dependencies
+          npm install -g @ionic/cli &
+          IONIC_PID=$!
+          
+          # Install project dependencies
+          cd ${{ env.APP_PATH }}
+          npm ci --prefer-offline --no-audit
+          
+          # Wait for Ionic CLI installation
+          wait $IONIC_PID
 
-      - name: Install Global CLI Tools
+      # BUILD PHASE
+      - name: Build Ionic application
+        working-directory: ${{ env.APP_PATH }}
         run: |
-          npm install -g @ionic/cli @angular/cli
-
-      - name: Install Angular Service Worker
-        run: |
-          cd $APP_PATH
-          ANGULAR_VERSION=$(node -p "require('./node_modules/@angular/core/package.json').version")
-          npm install @angular/service-worker@${ANGULAR_VERSION}
-
-      - name: Check if PWA is already configured
-        run: |
-          cd $APP_PATH
-          if grep -q '"serviceWorker": true' angular.json; then
-            echo "PWA_ALREADY_CONFIGURED=true" >> $GITHUB_ENV
-          else
-            echo "PWA_ALREADY_CONFIGURED=false" >> $GITHUB_ENV
-          fi
-
-      - name: Check if app is standalone
-        run: |
-          cd $APP_PATH
-          if grep -q 'bootstrapApplication' src/main.ts; then
-            echo "IS_STANDALONE=true" >> $GITHUB_ENV
-          else
-            echo "IS_STANDALONE=false" >> $GITHUB_ENV
-          fi
-
-      - name: Add PWA support if not configured
-        if: ${{ env.PWA_ALREADY_CONFIGURED == 'false' }}
-        run: |
-          cd $APP_PATH
-
-          # Install ImageMagick first
-          sudo apt-get update && sudo apt-get install -y imagemagick
-
-          # Configure ImageMagick policy to allow operations
-          sudo sed -i 's/<policy domain="coder" rights="none" pattern="PDF" \/>/<policy domain="coder" rights="read|write" pattern="PDF" \/>/' /etc/ImageMagick-6/policy.xml
-
-          # Create icons directory
-          mkdir -p src/assets/icons
-
-          # Create a base64 default icon if needed
-          BASE64_ICON="iVBORw0KGgoAAAANSUhEUgAAAgAAAAIAAQMAAADOtka5AAAABlBMVEX///8AAABVwtN+AAACC0lEQVR42u3bO3LjMBCE4cYtX8VX0dV4NR9FV+NVvAp8kLWcSguQmOkG8H9hJ3irmGKrh8MwDMMwDMMwDMMwDMMwDMMwDMMwDMMwDLO7+b7/GV3e3+N0jfP1reX7PLzG+M7/MY7XP5bxp8s4v3+JfRnH6T3OcHhEYFjW4TQ+p2OcEdht/x9eEbgD6P4I3AH0eATuAHo4AncAPRqBw/+Wh1cEpnV4jI/xNSKw1/7PEdiuD28I7LX/SwT22v8tAt3v/x6B7vf/iED3+z9FoPv9XyLQ/f7vEeh+/48IdL//MwLd7/8age73/xaB7vf/HoHu9/8Rge73/xyB7vf/GoHu9/8ege73/zMC3e//VwS63/+vCHS//2n7//sE/ncAHSNwB9AxAncAHSJwB9A+AncA7SJwB9AmAncAbSNwB9AmAoef7f/7CN63P07XOF/fWr7Pw2uM7/wf43j9Yxl/uozz+5fYl3GcYv9nBG4Duj8CdwA9HoE7gB6OwB1Aj0bgDqBHI3D43/LwisCyDo/xMb5GBLba/zkCW/XhDYGt9n+JwFb7v0Wg+/3fI9D9/h8R6H7/pwh0v/9LBLrf/y0C3e//HoHu9/8Rge73f45A9/t/jUD3+3+LQPf7/x6B7vf/MQLd7/9XBLrf/68IdL//0/b/9wn87wA6RuAOoGME7gA6ROAOoH0E7gDaReAOoE0E7gDaRuAOoE0EDj/b//cReN/+OAzDMAzDMAzDMAzDMOwP8xeV2aaBy4KWqwAAAABJRU5ErkJggg=="
-
-          # Generate PWA icons from resources/icon.png if it exists
-          if [ -f "resources/icon.png" ]; then
-            SOURCE_ICON="resources/icon.png"
-          elif [ -f "src/assets/icon/favicon.png" ]; then
-            SOURCE_ICON="src/assets/icon/favicon.png"
-          else
-            # Create a default icon from base64
-            echo "$BASE64_ICON" | base64 -d > src/assets/icons/default-icon.png
-            SOURCE_ICON="src/assets/icons/default-icon.png"
-          fi
-
-          # Generate various icon sizes with error handling
-          for size in 72 96 128 144 152 192 384 512; do
-            if ! convert "$SOURCE_ICON" -resize ${size}x${size} -background none -gravity center -extent ${size}x${size} src/assets/icons/icon-${size}x${size}.png; then
-              echo "Failed to generate ${size}x${size} icon, using default"
-              echo "$BASE64_ICON" | base64 -d | convert - -resize ${size}x${size} src/assets/icons/icon-${size}x${size}.png
-            fi
-          done
-
-          # Verify icons were created
-          for size in 72 96 128 144 152 192 384 512; do
-            if [ ! -f "src/assets/icons/icon-${size}x${size}.png" ]; then
-              echo "ERROR: Failed to create icon-${size}x${size}.png"
-              exit 1
-            fi
-          done
-
-          # Create manifest.webmanifest with all icon sizes
-          cat > src/manifest.webmanifest << EOF
-          {
-            "name": "Ionic PWA App",
-            "short_name": "IonicPWA",
-            "theme_color": "#1976d2",
-            "background_color": "#ffffff",
-            "display": "standalone",
-            "scope": "/$REPO_NAME/",
-            "start_url": "/$REPO_NAME/",
-            "icons": [
-              {
-                "src": "assets/icons/icon-72x72.png",
-                "sizes": "72x72",
-                "type": "image/png",
-                "purpose": "maskable any"
-              },
-              {
-                "src": "assets/icons/icon-96x96.png",
-                "sizes": "96x96",
-                "type": "image/png",
-                "purpose": "maskable any"
-              },
-              {
-                "src": "assets/icons/icon-128x128.png",
-                "sizes": "128x128",
-                "type": "image/png",
-                "purpose": "maskable any"
-              },
-              {
-                "src": "assets/icons/icon-144x144.png",
-                "sizes": "144x144",
-                "type": "image/png",
-                "purpose": "maskable any"
-              },
-              {
-                "src": "assets/icons/icon-152x152.png",
-                "sizes": "152x152",
-                "type": "image/png",
-                "purpose": "maskable any"
-              },
-              {
-                "src": "assets/icons/icon-192x192.png",
-                "sizes": "192x192",
-                "type": "image/png",
-                "purpose": "maskable any"
-              },
-              {
-                "src": "assets/icons/icon-384x384.png",
-                "sizes": "384x384",
-                "type": "image/png",
-                "purpose": "maskable any"
-              },
-              {
-                "src": "assets/icons/icon-512x512.png",
-                "sizes": "512x512",
-                "type": "image/png",
-                "purpose": "maskable any"
-              }
-            ]
+          echo "🏗️ Starting build process..."
+          
+          # Build the app
+          ionic build --configuration=${{ env.ANGULAR_CONFIG }} -- --base-href /${{ env.REPO_NAME }}/ || {
+            echo "❌ Build failed"
+            exit 1
           }
-          EOF
-
-          # 3. Create ngsw-config.json
-          cat > src/ngsw-config.json << EOF
-          {
-            "\$schema": "./node_modules/@angular/service-worker/config/schema.json",
-            "index": "/index.html",
-            "assetGroups": [
-              {
-                "name": "app",
-                "installMode": "prefetch",
-                "resources": {
-                  "files": [
-                    "/favicon.ico",
-                    "/index.html",
-                    "/manifest.webmanifest",
-                    "/*.css",
-                    "/*.js"
-                  ]
-                }
-              },
-              {
-                "name": "assets",
-                "name": "assets",
-                "installMode": "lazy",
-                "updateMode": "prefetch",
-                "resources": {
-                  "files": [
-                    "/assets/**",
-                    "/*.(svg|cur|jpg|jpeg|png|apng|webp|avif|gif|otf|ttf|woff|woff2)"
-                  ]
-                }
-              }
-            ],
-            "navigationUrls": [
-              "!/tabs/**/*.{js,css,json,jpg,jpeg,png,gif,webp,ico,woff,woff2}",
-              "!/**/*.{js,css,json,jpg,jpeg,png,gif,webp,ico,woff,woff2}",
-              "!/**/*__*",
-              "!/**/*__*/**"
-            ],
-            "dataGroups": []
-          }
-          EOF
-
-          # 4. Update angular.json
-          jq '.projects.app.architect.build.options += {
-            "serviceWorker": true,
-            "ngswConfigPath": "src/ngsw-config.json"
-          } | .projects.app.architect.build.configurations.production += {
-            "serviceWorker": true,
-            "baseHref": "/'$REPO_NAME'/",
-            "deployUrl": "/'$REPO_NAME'/"
-          } | .projects.app.architect.build.options.assets += [
-            "src/manifest.webmanifest",
-            {
-              "glob": "ngsw-worker.js",
-              "input": "node_modules/@angular/service-worker",
-              "output": "/"
-            }
-          ]' angular.json > angular.tmp.json && mv angular.tmp.json angular.json
-
-          # 5. Update index.html
-          sed -i "s|<base href=\"/\">|<base href=\"/$REPO_NAME/\">|" src/index.html
-          sed -i '/<\/head>/i\  <link rel="manifest" href="manifest.webmanifest" crossorigin="use-credentials">\n  <meta name="theme-color" content="#1976d2">' src/index.html
-
-          # 6. Add service worker registration
-          sed -i '/<\/body>/i\  <script>\n    if ("serviceWorker" in navigator) {\n      window.addEventListener("load", function() {\n        navigator.serviceWorker.register("ngsw-worker.js")\n          .then(function(registration) {\n            console.log("Service Worker registered with scope:", registration.scope);\n          })\n          .catch(function(error) {\n            console.error("Service Worker registration failed:", error);\n          });\n      });\n    }\n  </script>' src/index.html
-
-      - name: Build the Ionic PWA
-        run: |
-          cd $APP_PATH
-
-          # Ensure environments directory exists
-          mkdir -p src/environments
-
-          # Create environment files
-          cat > src/environments/environment.ts << EOF
-          export const environment = {
-            production: false
-          };
-          EOF
-
-          cat > src/environments/environment.prod.ts << EOF
-          export const environment = {
-            production: true
-          };
-          EOF
-
-          # Modify main.ts to include environment and service worker
-          if ! grep -q "import { environment } from './environments/environment';" src/main.ts; then
-            sed -i "1i import { environment } from './environments/environment';" src/main.ts
-          fi
-
-          if [ "$IS_STANDALONE" = "true" ]; then
-            if ! grep -q "provideServiceWorker" src/main.ts; then
-              sed -i "s/providers: \[/providers: [provideServiceWorker('ngsw-worker.js', { enabled: environment.production }),/" src/main.ts
-              sed -i "1i import { provideServiceWorker } from '@angular/service-worker';" src/main.ts
-            fi
-          else
-            if ! grep -q "ServiceWorkerModule.register" src/app/app.module.ts; then
-              sed -i "s/imports: \[/imports: [ServiceWorkerModule.register('ngsw-worker.js', { enabled: environment.production }),/" src/app/app.module.ts
-              sed -i "1i import { ServiceWorkerModule } from '@angular/service-worker';" src/app/app.module.ts
-              sed -i "1i import { environment } from '../environments/environment';" src/app/app.module.ts
-            fi
-          fi
-
-          # Build the app with PWA support
-          ionic build --prod
-
-          # Post-build fixes for PWA and routing
+          
+          # Navigate to build output
           cd www
+          
+          # Setup routing handlers for GitHub Pages
+          echo "⚙️ Setting up GitHub Pages routing..."
+          
+          # Create 404.html and add routing handler
           cp index.html 404.html
-
-          # Add routing handler to 404.html
+          
+          # Add routing handlers
           sed -i '/<head>/a\
+          <!-- GitHub Pages 404 handler -->\
           <script>\
             (function() {\
               var redirect = sessionStorage.redirect;\
@@ -320,9 +126,9 @@ jobs:
               }\
             })();\
           </script>' 404.html
-
-          # Add routing handler to index.html
+          
           sed -i '/<head>/a\
+          <!-- Route state preservation -->\
           <script>\
             (function() {\
               var l = location.href;\
@@ -331,15 +137,44 @@ jobs:
               }\
             })();\
           </script>' index.html
+          
+          echo "✅ Build completed successfully"
 
-      - name: Setup Pages
+      # VALIDATION PHASE
+      - name: Verify build output
+        run: |
+          if [ ! -d "${{ env.APP_PATH }}/www" ]; then
+            echo "❌ Error: Build output directory not found"
+            exit 1
+          fi
+          echo "📊 Build size: $(du -sh ${{ env.APP_PATH }}/www | cut -f1)"
+
+      # DEPLOYMENT PHASE
+      - name: Setup GitHub Pages
         uses: actions/configure-pages@v5
-
+        with:
+          enablement: pages
+          
       - name: Upload artifact
-        uses: actions/upload-pages-artifact@v1
+        uses: actions/upload-pages-artifact@v3
         with:
           path: '${{ env.APP_PATH }}/www'
+          retention-days: 1  # Reduce retention period for artifacts
 
       - name: Deploy to GitHub Pages
         id: deployment
-        uses: actions/deploy-pages@v1
+        uses: actions/deploy-pages@v4
+        timeout-minutes: 5  # Add timeout for deployment
+
+      - name: Deployment status
+        if: always()
+        shell: bash
+        run: |
+          if [[ "${{ steps.deployment.outcome }}" == "success" ]]; then
+            echo "✅ Deployment successful"
+            echo "🌍 Site available at: ${{ steps.deployment.outputs.page_url }}"
+          else
+            echo "❌ Deployment failed"
+            echo "Deployment outcome: ${{ steps.deployment.outcome }}"
+            exit 1
+          fi
