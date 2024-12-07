@@ -40,17 +40,38 @@ jobs:
         uses: actions/setup-node@v3
         with:
           node-version: '18'
+          cache: 'npm'
+          cache-dependency-path: '${{ env.APP_PATH }}/package-lock.json'
+
+      - name: Cache Angular and Ionic build
+        uses: actions/cache@v3
+        with:
+          path: |
+            ${{ env.APP_PATH }}/.angular/cache
+            ${{ env.APP_PATH }}/www
+            ${{ env.APP_PATH }}/platforms
+            ${{ env.APP_PATH }}/plugins
+            ${{ env.APP_PATH }}/.sourcemaps
+            ${{ env.APP_PATH }}/node_modules/.cache
+          key: ${{ runner.os }}-ionic-build-${{ hashFiles('**/package-lock.json') }}-${{ hashFiles('**/*.[jt]s', '**/*.[cm]ss', '**/*.html') }}
+          restore-keys: |
+            ${{ runner.os }}-ionic-build-${{ hashFiles('**/package-lock.json') }}-
+            ${{ runner.os }}-ionic-build-
 
       - name: Install Dependencies
         run: |
           cd $APP_PATH
           npm ci
 
-      - name: Install Ionic CLI
-        run: npm install -g @ionic/cli
+      - name: Install Global CLI Tools
+        run: |
+          npm install -g @ionic/cli @angular/cli
 
-      - name: Install Angular CLI
-        run: npm install -g @angular/cli
+      - name: Install Angular Service Worker
+        run: |
+          cd $APP_PATH
+          ANGULAR_VERSION=$(node -p "require('./node_modules/@angular/core/package.json').version")
+          npm install @angular/service-worker@${ANGULAR_VERSION}
 
       - name: Check if PWA is already configured
         run: |
@@ -75,125 +96,55 @@ jobs:
         run: |
           cd $APP_PATH
 
-          # Ensure dependencies are installed
-          npm ci
+          # Install ImageMagick first
+          sudo apt-get update && sudo apt-get install -y imagemagick
 
-          # Get the actual installed Angular core version
-          ANGULAR_CORE_VERSION=$(node -p "require('./node_modules/@angular/core/package.json').version")
-          echo "Detected installed @angular/core version is $ANGULAR_CORE_VERSION"
-          
-          # Install PWA dependencies with matching version
-          npm install @angular/service-worker@$ANGULAR_CORE_VERSION
-          
-          # Create assets directories if they don't exist
+          # Configure ImageMagick policy to allow operations
+          sudo sed -i 's/<policy domain="coder" rights="none" pattern="PDF" \/>/<policy domain="coder" rights="read|write" pattern="PDF" \/>/' /etc/ImageMagick-6/policy.xml
+
+          # Create icons directory
           mkdir -p src/assets/icons
-          mkdir -p src/assets/screenshots
-          
-          # Install canvas package
-          npm install canvas
-          
-          # Create icons and screenshots (your existing create-assets.js code)
-          cat > create-assets.js << 'EOF'
-          const { createCanvas } = require('canvas');
-          const fs = require('fs');
-          
-          // Function to create an icon
-          function createIcon(size) {
-            const canvas = createCanvas(size, size);
-            const ctx = canvas.getContext('2d');
-            
-            // Fill background
-            ctx.fillStyle = '#1976d2';
-            ctx.fillRect(0, 0, size, size);
-            
-            // Add some simple icon design
-            ctx.beginPath();
-            ctx.arc(size/2, size/2, size/3, 0, Math.PI * 2);
-            ctx.fillStyle = '#ffffff';
-            ctx.fill();
-            
-            // Save the icon
-            fs.writeFileSync(`src/assets/icons/icon-${size}x${size}.png`, canvas.toBuffer());
-          }
-          
-          // Create all required icons
-          [72, 96, 128, 144, 152, 192, 384, 512].forEach(size => createIcon(size));
-          
-          // Create desktop screenshot (1920x1080)
-          const desktopCanvas = createCanvas(1920, 1080);
-          const dctx = desktopCanvas.getContext('2d');
-          dctx.fillStyle = '#ffffff';
-          dctx.fillRect(0, 0, 1920, 1080);
-          dctx.fillStyle = '#1976d2';
-          dctx.fillRect(0, 0, 1920, 80); // Header
-          dctx.fillStyle = '#ffffff';
-          dctx.font = 'bold 48px Arial';
-          dctx.fillText('My Ionic PWA', 50, 55);
-          fs.writeFileSync('src/assets/screenshots/desktop.png', desktopCanvas.toBuffer());
-          
-          // Create mobile screenshot (750x1334)
-          const mobileCanvas = createCanvas(750, 1334);
-          const mctx = mobileCanvas.getContext('2d');
-          mctx.fillStyle = '#ffffff';
-          mctx.fillRect(0, 0, 750, 1334);
-          mctx.fillStyle = '#1976d2';
-          mctx.fillRect(0, 0, 750, 60); // Header
-          mctx.fillStyle = '#ffffff';
-          mctx.font = 'bold 32px Arial';
-          mctx.fillText('My Ionic PWA', 20, 40);
-          fs.writeFileSync('src/assets/screenshots/mobile.png', mobileCanvas.toBuffer());
-          EOF
-          
-          # Generate all assets
-          node create-assets.js
-          
-          # Configure PWA
-          # Remove existing ngsw-config.json if it exists
-          rm -f ngsw-config.json
-          
-          # Create fresh ngsw-config.json
-          cat > ngsw-config.json << EOF
-          {
-            "\$schema": "./node_modules/@angular/service-worker/config/schema.json",
-            "index": "/index.html",
-            "assetGroups": [
-              {
-                "name": "app",
-                "installMode": "prefetch",
-                "resources": {
-                  "files": [
-                    "/favicon.ico",
-                    "/index.html",
-                    "/manifest.webmanifest",
-                    "/*.css",
-                    "/*.js"
-                  ]
-                }
-              },
-              {
-                "name": "assets",
-                "installMode": "lazy",
-                "updateMode": "prefetch",
-                "resources": {
-                  "files": [
-                    "/assets/**"
-                  ]
-                }
-              }
-            ]
-          }
-          EOF
-          
-          # Update manifest.webmanifest
+
+          # Create a base64 default icon if needed
+          BASE64_ICON="iVBORw0KGgoAAAANSUhEUgAAAgAAAAIAAQMAAADOtka5AAAABlBMVEX///8AAABVwtN+AAACC0lEQVR42u3bO3LjMBCE4cYtX8VX0dV4NR9FV+NVvAp8kLWcSguQmOkG8H9hJ3irmGKrh8MwDMMwDMMwDMMwDMMwDMMwDMMwDMMwDLO7+b7/GV3e3+N0jfP1reX7PLzG+M7/MY7XP5bxp8s4v3+JfRnH6T3OcHhEYFjW4TQ+p2OcEdht/x9eEbgD6P4I3AH0eATuAHo4AncAPRqBw/+Wh1cEpnV4jI/xNSKw1/7PEdiuD28I7LX/SwT22v8tAt3v/x6B7vf/iED3+z9FoPv9XyLQ/f7vEeh+/48IdL//MwLd7/8age73/xaB7vf/HoHu9/8Rge73/xyB7vf/GoHu9/8ege73/zMC3e//VwS63/+vCHS//2n7//sE/ncAHSNwB9AxAncAHSJwB9A+AncA7SJwB9AmAncAbSNwB9AmAoef7f/7CN63P07XOF/fWr7Pw2uM7/wf43j9Yxl/uozz+5fYl3GcYv9nBG4Duj8CdwA9HoE7gB6OwB1Aj0bgDqBHI3D43/LwisCyDo/xMb5GBLba/zkCW/XhDYGt9n+JwFb7v0Wg+/3fI9D9/h8R6H7/pwh0v/9LBLrf/y0C3e//HoHu9/8Rge73f45A9/t/jUD3+3+LQPf7/x6B7vf/MQLd7/9XBLrf/68IdL//0/b/9wn87wA6RuAOoGME7gA6ROAOoH0E7gDaReAOoE0E7gDaRuAOoE0EDj/b//cReN/+OAzDMAzDMAzDMAzDMOwP8xeV2aaBy4KWqwAAAABJRU5ErkJggg=="
+
+          # Generate PWA icons from resources/icon.png if it exists
+          if [ -f "resources/icon.png" ]; then
+            SOURCE_ICON="resources/icon.png"
+          elif [ -f "src/assets/icon/favicon.png" ]; then
+            SOURCE_ICON="src/assets/icon/favicon.png"
+          else
+            # Create a default icon from base64
+            echo "$BASE64_ICON" | base64 -d > src/assets/icons/default-icon.png
+            SOURCE_ICON="src/assets/icons/default-icon.png"
+          fi
+
+          # Generate various icon sizes with error handling
+          for size in 72 96 128 144 152 192 384 512; do
+            if ! convert "$SOURCE_ICON" -resize ${size}x${size} -background none -gravity center -extent ${size}x${size} src/assets/icons/icon-${size}x${size}.png; then
+              echo "Failed to generate ${size}x${size} icon, using default"
+              echo "$BASE64_ICON" | base64 -d | convert - -resize ${size}x${size} src/assets/icons/icon-${size}x${size}.png
+            fi
+          done
+
+          # Verify icons were created
+          for size in 72 96 128 144 152 192 384 512; do
+            if [ ! -f "src/assets/icons/icon-${size}x${size}.png" ]; then
+              echo "ERROR: Failed to create icon-${size}x${size}.png"
+              exit 1
+            fi
+          done
+
+          # Create manifest.webmanifest with all icon sizes
           cat > src/manifest.webmanifest << EOF
           {
-            "name": "My Ionic PWA",
+            "name": "Ionic PWA App",
             "short_name": "IonicPWA",
             "theme_color": "#1976d2",
             "background_color": "#ffffff",
             "display": "standalone",
-            "scope": "/${{ env.REPO_NAME }}/",
-            "start_url": "/${{ env.REPO_NAME }}/index.html",
+            "scope": "/$REPO_NAME/",
+            "start_url": "/$REPO_NAME/",
             "icons": [
               {
                 "src": "assets/icons/icon-72x72.png",
@@ -246,43 +197,149 @@ jobs:
             ]
           }
           EOF
-          
-          # Update angular.json
-          jq '.projects.app.architect.build.configurations.production += {"serviceWorker": true, "ngswConfigPath": "ngsw-config.json"}' angular.json > angular.tmp.json && mv angular.tmp.json angular.json
-          
-          # Update index.html
-          sed -i "s|<base href=\"/\">|<base href=\"/${{ env.REPO_NAME }}/\">|" src/index.html
+
+          # 3. Create ngsw-config.json
+          cat > src/ngsw-config.json << EOF
+          {
+            "\$schema": "./node_modules/@angular/service-worker/config/schema.json",
+            "index": "/index.html",
+            "assetGroups": [
+              {
+                "name": "app",
+                "installMode": "prefetch",
+                "resources": {
+                  "files": [
+                    "/favicon.ico",
+                    "/index.html",
+                    "/manifest.webmanifest",
+                    "/*.css",
+                    "/*.js"
+                  ]
+                }
+              },
+              {
+                "name": "assets",
+                "name": "assets",
+                "installMode": "lazy",
+                "updateMode": "prefetch",
+                "resources": {
+                  "files": [
+                    "/assets/**",
+                    "/*.(svg|cur|jpg|jpeg|png|apng|webp|avif|gif|otf|ttf|woff|woff2)"
+                  ]
+                }
+              }
+            ],
+            "navigationUrls": [
+              "!/tabs/**/*.{js,css,json,jpg,jpeg,png,gif,webp,ico,woff,woff2}",
+              "!/**/*.{js,css,json,jpg,jpeg,png,gif,webp,ico,woff,woff2}",
+              "!/**/*__*",
+              "!/**/*__*/**"
+            ],
+            "dataGroups": []
+          }
+          EOF
+
+          # 4. Update angular.json
+          jq '.projects.app.architect.build.options += {
+            "serviceWorker": true,
+            "ngswConfigPath": "src/ngsw-config.json"
+          } | .projects.app.architect.build.configurations.production += {
+            "serviceWorker": true,
+            "baseHref": "/'$REPO_NAME'/",
+            "deployUrl": "/'$REPO_NAME'/"
+          } | .projects.app.architect.build.options.assets += [
+            "src/manifest.webmanifest",
+            {
+              "glob": "ngsw-worker.js",
+              "input": "node_modules/@angular/service-worker",
+              "output": "/"
+            }
+          ]' angular.json > angular.tmp.json && mv angular.tmp.json angular.json
+
+          # 5. Update index.html
+          sed -i "s|<base href=\"/\">|<base href=\"/$REPO_NAME/\">|" src/index.html
           sed -i '/<\/head>/i\  <link rel="manifest" href="manifest.webmanifest" crossorigin="use-credentials">\n  <meta name="theme-color" content="#1976d2">' src/index.html
-          sed -i "s|<your-repo-name>|${{ env.REPO_NAME }}|g" src/index.html
-          
-          # Add service worker registration script
-          sed -i '/<\/body>/i\  <script>\n    if ("serviceWorker" in navigator) {\n      window.addEventListener("load", function() {\n        navigator.serviceWorker.register("ngsw-worker.js", { scope: "/${{ env.REPO_NAME }}/" })\n          .then(function(registration) { console.log("SW registered:", registration.scope); })\n          .catch(function(error) { console.error("SW registration failed:", error); });\n      });\n    }\n  </script>' src/index.html
+
+          # 6. Add service worker registration
+          sed -i '/<\/body>/i\  <script>\n    if ("serviceWorker" in navigator) {\n      window.addEventListener("load", function() {\n        navigator.serviceWorker.register("ngsw-worker.js")\n          .then(function(registration) {\n            console.log("Service Worker registered with scope:", registration.scope);\n          })\n          .catch(function(error) {\n            console.error("Service Worker registration failed:", error);\n          });\n      });\n    }\n  </script>' src/index.html
 
       - name: Build the Ionic PWA
         run: |
           cd $APP_PATH
-          
-          # Ensure production environment
+
+          # Ensure environments directory exists
           mkdir -p src/environments
-          echo "export const environment = { production: true };" > src/environments/environment.prod.ts
-          
+
+          # Create environment files
+          cat > src/environments/environment.ts << EOF
+          export const environment = {
+            production: false
+          };
+          EOF
+
+          cat > src/environments/environment.prod.ts << EOF
+          export const environment = {
+            production: true
+          };
+          EOF
+
+          # Modify main.ts to include environment and service worker
+          if ! grep -q "import { environment } from './environments/environment';" src/main.ts; then
+            sed -i "1i import { environment } from './environments/environment';" src/main.ts
+          fi
+
+          if [ "$IS_STANDALONE" = "true" ]; then
+            if ! grep -q "provideServiceWorker" src/main.ts; then
+              sed -i "s/providers: \[/providers: [provideServiceWorker('ngsw-worker.js', { enabled: environment.production }),/" src/main.ts
+              sed -i "1i import { provideServiceWorker } from '@angular/service-worker';" src/main.ts
+            fi
+          else
+            if ! grep -q "ServiceWorkerModule.register" src/app/app.module.ts; then
+              sed -i "s/imports: \[/imports: [ServiceWorkerModule.register('ngsw-worker.js', { enabled: environment.production }),/" src/app/app.module.ts
+              sed -i "1i import { ServiceWorkerModule } from '@angular/service-worker';" src/app/app.module.ts
+              sed -i "1i import { environment } from '../environments/environment';" src/app/app.module.ts
+            fi
+          fi
+
           # Build the app with PWA support
-          ionic build --configuration=production -- --base-href="/${{ env.REPO_NAME }}/" --deploy-url="/${{ env.REPO_NAME }}/" --service-worker=true
-          
-          # Post-build fix: Create 404.html
+          ionic build --prod
+
+          # Post-build fixes for PWA and routing
           cd www
           cp index.html 404.html
 
+          # Add routing handler to 404.html
+          sed -i '/<head>/a\
+          <script>\
+            (function() {\
+              var redirect = sessionStorage.redirect;\
+              delete sessionStorage.redirect;\
+              if (redirect && redirect != location.href) {\
+                history.replaceState(null, null, redirect);\
+              }\
+            })();\
+          </script>' 404.html
+
+          # Add routing handler to index.html
+          sed -i '/<head>/a\
+          <script>\
+            (function() {\
+              var l = location.href;\
+              if (l.indexOf("?") > -1) {\
+                sessionStorage.redirect = l.substr(0, l.indexOf("?"));\
+              }\
+            })();\
+          </script>' index.html
+
       - name: Setup Pages
         uses: actions/configure-pages@v5
-        with:
-          enablement: pages
 
       - name: Upload artifact
-        uses: actions/upload-pages-artifact@v3
+        uses: actions/upload-pages-artifact@v1
         with:
           path: '${{ env.APP_PATH }}/www'
 
       - name: Deploy to GitHub Pages
         id: deployment
-        uses: actions/deploy-pages@v4
+        uses: actions/deploy-pages@v1
